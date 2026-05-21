@@ -1,0 +1,74 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Maven Wrapper
+.mvn/timing.properties
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Spring Boot local configs
+application-local.yml
+application-local.yaml
+application-local.properties
+application-dev-local.yml
+application-dev-local.yaml
+application-dev-local.properties
+
+# Docker local data / volumes
+docker-data/
+data/
+volumes/
+kafka-data/
+mongo-data/
+
+# MongoDB local files
+*.wt
+*.lock
+*.turtle
+WiredTiger*
+journal/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+
+# Test reports / coverage
+surefire-reports/
+failsafe-reports/
+coverage/
+jacoco.exec
+
+# Build outputs
+build/
+out/
+
+# Secrets / keys
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+secrets/
