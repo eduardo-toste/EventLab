@@ -2,37 +2,41 @@
 
 > Projeto em construção.
 
-O **EventLab** é um laboratório prático criado para estudar **Kafka** e **MongoDB** com Java e Spring Boot.
+O **EventLab** é um projeto simples criado para estudar **Apache Kafka** e **MongoDB** com Java e Spring Boot.
 
-A ideia do projeto é simular um fluxo simples de eventos, onde uma ação inicial publica uma mensagem no Kafka e outros componentes consomem essa mensagem para continuar o processamento.
+A ideia é simular um fluxo básico de eventos:
 
-Fluxo base do projeto:
+Pedido criado  
+→ evento `order.created`  
+→ pagamento processado  
+→ evento `payment.processed`  
+→ notificação criada  
+→ evento `notification.created`
 
-Pedido fake criado  
-→ evento `order.created` publicado  
-→ pagamento fake processado  
-→ evento `payment.processed` publicado  
-→ notificação fake criada  
-→ evento `notification.created` publicado  
-→ eventos registrados no MongoDB
+## Objetivo
 
-## Intuito do projeto
+Este projeto tem como objetivo praticar:
 
-Este projeto está sendo desenvolvido com foco em estudo e prática de conceitos como:
-
-- Apache Kafka
-- Spring Kafka
-- Producers e Consumers
+- Kafka Producer
+- Kafka Consumer
 - Topics
 - Consumer Groups
 - Message Key
-- Event Envelope
-- EventId e CorrelationId
-- Event Chaining
+- EventId
+- CorrelationId
 - Retry
 - Dead Letter Topic
 - Idempotência
-- MongoDB para logs e rastreabilidade de eventos
+- MongoDB para logs de eventos
+
+## Stack
+
+- Java 21
+- Spring Boot
+- Spring Kafka
+- MongoDB
+- Docker Compose
+- Kafka UI
 
 ## Status
 
