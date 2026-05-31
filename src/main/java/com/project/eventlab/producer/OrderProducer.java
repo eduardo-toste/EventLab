@@ -9,13 +9,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class OrderProducer {
 
-    @Value("${app.kafka.topics.order-created}")
-    private String topic;
-
+    private final String topic;
     private final KafkaTemplate<String, EventEnvelope<OrderCreatedData>> kafkaTemplate;
 
-    public OrderProducer(KafkaTemplate<String, EventEnvelope<OrderCreatedData>> kafkaTemplate) {
+    public OrderProducer(
+            KafkaTemplate<String, EventEnvelope<OrderCreatedData>> kafkaTemplate,
+            @Value("${app.kafka.topics.order-created}") String topic
+    ) {
         this.kafkaTemplate = kafkaTemplate;
+        this.topic = topic;
     }
 
     public void publishOrderCreated(String orderId, EventEnvelope<OrderCreatedData> event) {
