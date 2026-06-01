@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 public class CreatedOrderConsumer {
 
     @KafkaListener(
-            topics = "order.created",
+            topics = "${app.kafka.topics.order-created}",
             groupId = "order-created-logger"
     )
     public void consume(EventEnvelope<OrderCreatedData> event) {
