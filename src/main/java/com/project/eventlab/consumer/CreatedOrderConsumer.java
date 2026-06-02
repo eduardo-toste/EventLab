@@ -13,7 +13,7 @@ public class CreatedOrderConsumer {
             groupId = "order-created-logger"
     )
     public void consume(EventEnvelope<OrderCreatedData> event) {
-        System.out.println(event);
+        System.out.println("Event: " + event);
     }
 
 }
