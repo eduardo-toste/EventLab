@@ -30,6 +30,7 @@ public class OrderService {
 
         EventEnvelope<OrderCreatedData> event = new EventEnvelope<>(
                 UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
                 "ORDER_CREATED",
                 "1",
                 LocalDateTime.now(),
