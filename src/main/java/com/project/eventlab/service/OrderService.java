@@ -1,8 +1,8 @@
 package com.project.eventlab.service;
 
-import com.project.eventlab.dto.OrderCreatedData;
-import com.project.eventlab.dto.OrderRequest;
-import com.project.eventlab.dto.OrderResponse;
+import com.project.eventlab.dto.order.OrderCreatedData;
+import com.project.eventlab.dto.order.OrderRequest;
+import com.project.eventlab.dto.order.OrderResponse;
 import com.project.eventlab.event.EventEnvelope;
 import com.project.eventlab.producer.OrderProducer;
 import org.springframework.stereotype.Service;

@@ -1,7 +1,7 @@
 package com.project.eventlab.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.project.eventlab.dto.OrderCreatedData;
+import com.project.eventlab.dto.order.OrderCreatedData;
 import com.project.eventlab.event.EventEnvelope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

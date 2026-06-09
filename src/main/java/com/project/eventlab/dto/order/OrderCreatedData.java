@@ -1,4 +1,4 @@
-package com.project.eventlab.dto;
+package com.project.eventlab.dto.order;
 
 import java.math.BigDecimal;
 

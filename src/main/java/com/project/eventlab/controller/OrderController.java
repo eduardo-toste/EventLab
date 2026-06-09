@@ -1,7 +1,7 @@
 package com.project.eventlab.controller;
 
-import com.project.eventlab.dto.OrderRequest;
-import com.project.eventlab.dto.OrderResponse;
+import com.project.eventlab.dto.order.OrderRequest;
+import com.project.eventlab.dto.order.OrderResponse;
 import com.project.eventlab.service.OrderService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

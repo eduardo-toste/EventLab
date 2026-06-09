@@ -1,6 +1,6 @@
 package com.project.eventlab.producer;
 
-import com.project.eventlab.dto.OrderCreatedData;
+import com.project.eventlab.dto.order.OrderCreatedData;
 import com.project.eventlab.event.EventEnvelope;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
