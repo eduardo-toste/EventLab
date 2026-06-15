@@ -20,4 +20,29 @@ public class EventLogDocument {
     private Object payload;
     private LocalDateTime createdAt;
 
+    public EventLogDocument(
+            String eventId,
+            String correlationId,
+            String eventType,
+            String topic,
+            String key,
+            String direction,
+            String consumerName,
+            Object payload,
+            LocalDateTime createdAt
+    ) {
+        this.eventId = eventId;
+        this.correlationId = correlationId;
+        this.eventType = eventType;
+        this.topic = topic;
+        this.key = key;
+        this.direction = direction;
+        this.consumerName = consumerName;
+        this.payload = payload;
+        this.createdAt = createdAt;
+    }
+
+    protected EventLogDocument() {
+    }
+
 }
