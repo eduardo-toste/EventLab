@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.eventlab.dto.order.OrderCreatedData;
 import com.project.eventlab.dto.payment.PaymentProcessedData;
 import com.project.eventlab.event.EventEnvelope;
+import com.project.eventlab.mongo.service.EventLogService;
 import com.project.eventlab.service.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -17,10 +19,15 @@ public class PaymentProcessedConsumer {
 
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
+    private final EventLogService eventLogService;
 
-    public PaymentProcessedConsumer(ObjectMapper objectMapper, NotificationService notificationService) {
+    @Value("${app.kafka.topics.payment-processed}")
+    private String topic;
+
+    public PaymentProcessedConsumer(ObjectMapper objectMapper, NotificationService notificationService, EventLogService eventLogService) {
         this.objectMapper = objectMapper;
         this.notificationService = notificationService;
+        this.eventLogService = eventLogService;
     }
 
     @KafkaListener(
@@ -49,6 +56,7 @@ public class PaymentProcessedConsumer {
         );
 
         notificationService.sendNotification(paymentProcessedEvent);
+        eventLogService.saveConsumed(topic, "payment-processed-logger", event);
     }
 
 }

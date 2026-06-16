@@ -3,9 +3,11 @@ package com.project.eventlab.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.eventlab.dto.order.OrderCreatedData;
 import com.project.eventlab.event.EventEnvelope;
+import com.project.eventlab.mongo.service.EventLogService;
 import com.project.eventlab.service.PaymentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -16,10 +18,15 @@ public class CreatedOrderConsumer {
 
     private final ObjectMapper objectMapper;
     private final PaymentService paymentService;
+    private final EventLogService eventLogService;
 
-    public CreatedOrderConsumer(ObjectMapper objectMapper, PaymentService paymentService) {
+    @Value("${app.kafka.topics.order-created}")
+    private String topic;
+
+    public CreatedOrderConsumer(ObjectMapper objectMapper, PaymentService paymentService, EventLogService eventLogService) {
         this.objectMapper = objectMapper;
         this.paymentService = paymentService;
+        this.eventLogService = eventLogService;
     }
 
     @KafkaListener(
@@ -46,6 +53,7 @@ public class CreatedOrderConsumer {
         );
 
         paymentService.processPayment(orderCreatedEvent);
+        eventLogService.saveConsumed(topic, "order-created-logger", event);
     }
 
 }

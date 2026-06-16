@@ -3,8 +3,10 @@ package com.project.eventlab.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.eventlab.dto.notification.NotificationCreatedData;
 import com.project.eventlab.event.EventEnvelope;
+import com.project.eventlab.mongo.service.EventLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -14,9 +16,14 @@ public class NotificationCreatedConsumerB {
     private static final Logger log = LoggerFactory.getLogger(NotificationCreatedConsumerB.class);
 
     private final ObjectMapper objectMapper;
+    private final EventLogService eventLogService;
 
-    public NotificationCreatedConsumerB(ObjectMapper objectMapper) {
+    @Value("${app.kafka.topics.notification-created}")
+    private String topic;
+
+    public NotificationCreatedConsumerB(ObjectMapper objectMapper, EventLogService eventLogService) {
         this.objectMapper = objectMapper;
+        this.eventLogService = eventLogService;
     }
 
     @KafkaListener(
@@ -34,6 +41,8 @@ public class NotificationCreatedConsumerB {
                 data.channel(),
                 data.status()
         );
+
+        eventLogService.saveConsumed(topic, "notification-created-logger-b", event);
     }
 
 }
