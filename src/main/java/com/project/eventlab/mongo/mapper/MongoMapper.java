@@ -28,7 +28,7 @@ public class MongoMapper {
                 event.eventType(),
                 topic,
                 null,
-                "PUBLISHED",
+                "CONSUMED",
                 consumerName,
                 event.data(),
                 event.occurredAt()
