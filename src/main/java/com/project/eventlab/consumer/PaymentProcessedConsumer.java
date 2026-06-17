@@ -5,6 +5,7 @@ import com.project.eventlab.dto.order.OrderCreatedData;
 import com.project.eventlab.dto.payment.PaymentProcessedData;
 import com.project.eventlab.event.EventEnvelope;
 import com.project.eventlab.mongo.service.EventLogService;
+import com.project.eventlab.mongo.service.IdempotencyService;
 import com.project.eventlab.service.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,14 +21,16 @@ public class PaymentProcessedConsumer {
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
     private final EventLogService eventLogService;
+    private final IdempotencyService idempotencyService;
 
     @Value("${app.kafka.topics.payment-processed}")
     private String topic;
 
-    public PaymentProcessedConsumer(ObjectMapper objectMapper, NotificationService notificationService, EventLogService eventLogService) {
+    public PaymentProcessedConsumer(ObjectMapper objectMapper, NotificationService notificationService, EventLogService eventLogService, IdempotencyService idempotencyService) {
         this.objectMapper = objectMapper;
         this.notificationService = notificationService;
         this.eventLogService = eventLogService;
+        this.idempotencyService = idempotencyService;
     }
 
     @KafkaListener(
@@ -35,28 +38,53 @@ public class PaymentProcessedConsumer {
             groupId = "payment-processed-logger"
     )
     public void consume(EventEnvelope<?> event) {
-        PaymentProcessedData data = objectMapper.convertValue(event.data(), PaymentProcessedData.class);
+        startProcessingEvent(event);
 
-        EventEnvelope<PaymentProcessedData> paymentProcessedEvent = new EventEnvelope<>(
+        try {
+            PaymentProcessedData data = objectMapper.convertValue(event.data(), PaymentProcessedData.class);
+            EventEnvelope<PaymentProcessedData> paymentProcessedEvent = new EventEnvelope<>(
+                    event.eventId(),
+                    event.correlationId(),
+                    event.eventType(),
+                    event.version(),
+                    event.occurredAt(),
+                    data
+            );
+
+            log.info(
+                    "[PAYMENT_PROCESSED_CONSUMED] eventId={} correlationId={} orderId={} paymentId={} total={}",
+                    event.eventId(),
+                    event.correlationId(),
+                    data.orderId(),
+                    data.paymentId(),
+                    data.amount()
+            );
+
+            notificationService.sendNotification(paymentProcessedEvent);
+            idempotencyService.markProcessed(event.eventId(), "payment-processed-logger");
+            eventLogService.saveConsumed(topic, "payment-processed-logger", event);
+        } catch (Exception ex) {
+            idempotencyService.markFailed(event.eventId(), "payment-processed-logger", ex.getMessage());
+            throw ex;
+        }
+    }
+
+    private void startProcessingEvent(EventEnvelope<?> event) {
+        boolean acquired = idempotencyService.tryStartProcessing(
                 event.eventId(),
+                "payment-processed-logger",
                 event.correlationId(),
-                event.eventType(),
-                event.version(),
-                event.occurredAt(),
-                data
+                event.eventType()
         );
 
-        log.info(
-                "[PAYMENT_PROCESSED_CONSUMED] eventId={} correlationId={} orderId={} paymentId={} total={}",
-                event.eventId(),
-                event.correlationId(),
-                data.orderId(),
-                data.paymentId(),
-                data.amount()
-        );
-
-        notificationService.sendNotification(paymentProcessedEvent);
-        eventLogService.saveConsumed(topic, "payment-processed-logger", event);
+        if (!acquired) {
+            log.info(
+                    "[PAYMENT_PROCESSED_DUPLICATE] eventId={} correlationId={} consumerName={}",
+                    event.eventId(),
+                    event.correlationId(),
+                    "payment-processed-logger"
+            );
+        }
     }
 
 }

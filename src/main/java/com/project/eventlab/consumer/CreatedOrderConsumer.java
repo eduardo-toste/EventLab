@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.eventlab.dto.order.OrderCreatedData;
 import com.project.eventlab.event.EventEnvelope;
 import com.project.eventlab.mongo.service.EventLogService;
+import com.project.eventlab.mongo.service.IdempotencyService;
 import com.project.eventlab.service.PaymentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,14 +20,16 @@ public class CreatedOrderConsumer {
     private final ObjectMapper objectMapper;
     private final PaymentService paymentService;
     private final EventLogService eventLogService;
+    private final IdempotencyService idempotencyService;
 
     @Value("${app.kafka.topics.order-created}")
     private String topic;
 
-    public CreatedOrderConsumer(ObjectMapper objectMapper, PaymentService paymentService, EventLogService eventLogService) {
+    public CreatedOrderConsumer(ObjectMapper objectMapper, PaymentService paymentService, EventLogService eventLogService, IdempotencyService idempotencyService) {
         this.objectMapper = objectMapper;
         this.paymentService = paymentService;
         this.eventLogService = eventLogService;
+        this.idempotencyService = idempotencyService;
     }
 
     @KafkaListener(
@@ -34,26 +37,53 @@ public class CreatedOrderConsumer {
             groupId = "order-created-logger"
     )
     public void consume(EventEnvelope<?> event) {
-        OrderCreatedData data = objectMapper.convertValue(event.data(), OrderCreatedData.class);
-        EventEnvelope<OrderCreatedData> orderCreatedEvent = new EventEnvelope<>(
+        startProcessingEvent(event);
+
+        try {
+            OrderCreatedData data = objectMapper.convertValue(event.data(), OrderCreatedData.class);
+            EventEnvelope<OrderCreatedData> orderCreatedEvent = new EventEnvelope<>(
+                    event.eventId(),
+                    event.correlationId(),
+                    event.eventType(),
+                    event.version(),
+                    event.occurredAt(),
+                    data
+            );
+
+            log.info(
+                    "[ORDER_CREATED_CONSUMED] eventId={} correlationId={} orderId={} total={}",
+                    event.eventId(),
+                    event.correlationId(),
+                    data.orderId(),
+                    data.total()
+            );
+
+            paymentService.processPayment(orderCreatedEvent);
+            idempotencyService.markProcessed(event.eventId(), "order-created-logger");
+            eventLogService.saveConsumed(topic, "order-created-logger", event);
+        } catch (Exception ex) {
+            idempotencyService.markFailed(event.eventId(), "order-created-logger", ex.getMessage());
+            throw ex;
+        }
+
+    }
+
+    private void startProcessingEvent(EventEnvelope<?> event) {
+        boolean acquired = idempotencyService.tryStartProcessing(
                 event.eventId(),
+                "order-created-logger",
                 event.correlationId(),
-                event.eventType(),
-                event.version(),
-                event.occurredAt(),
-                data
+                event.eventType()
         );
 
-        log.info(
-                "[ORDER_CREATED_CONSUMED] eventId={} correlationId={} orderId={} total={}",
-                event.eventId(),
-                event.correlationId(),
-                data.orderId(),
-                data.total()
-        );
-
-        paymentService.processPayment(orderCreatedEvent);
-        eventLogService.saveConsumed(topic, "order-created-logger", event);
+        if (!acquired) {
+            log.info(
+                    "[ORDER_CREATED_DUPLICATE] eventId={} correlationId={} consumerName={}",
+                    event.eventId(),
+                    event.correlationId(),
+                    "order-created-logger"
+            );
+        }
     }
 
 }
