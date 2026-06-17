@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 public class PaymentProcessedConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentProcessedConsumer.class);
+    private static final String CONSUMER_NAME = "payment-processed-logger";
 
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
@@ -35,10 +36,12 @@ public class PaymentProcessedConsumer {
 
     @KafkaListener(
             topics = "${app.kafka.topics.payment-processed}",
-            groupId = "payment-processed-logger"
+            groupId = CONSUMER_NAME
     )
     public void consume(EventEnvelope<?> event) {
-        startProcessingEvent(event);
+        if (!startProcessingEvent(event)) {
+            return;
+        }
 
         try {
             PaymentProcessedData data = objectMapper.convertValue(event.data(), PaymentProcessedData.class);
@@ -61,18 +64,18 @@ public class PaymentProcessedConsumer {
             );
 
             notificationService.sendNotification(paymentProcessedEvent);
-            idempotencyService.markProcessed(event.eventId(), "payment-processed-logger");
-            eventLogService.saveConsumed(topic, "payment-processed-logger", event);
+            idempotencyService.markProcessed(event.eventId(), CONSUMER_NAME);
+            eventLogService.saveConsumed(topic, CONSUMER_NAME, event);
         } catch (Exception ex) {
-            idempotencyService.markFailed(event.eventId(), "payment-processed-logger", ex.getMessage());
+            idempotencyService.markFailed(event.eventId(), CONSUMER_NAME, ex.getMessage());
             throw ex;
         }
     }
 
-    private void startProcessingEvent(EventEnvelope<?> event) {
+    private boolean startProcessingEvent(EventEnvelope<?> event) {
         boolean acquired = idempotencyService.tryStartProcessing(
                 event.eventId(),
-                "payment-processed-logger",
+                CONSUMER_NAME,
                 event.correlationId(),
                 event.eventType()
         );
@@ -82,9 +85,12 @@ public class PaymentProcessedConsumer {
                     "[PAYMENT_PROCESSED_DUPLICATE] eventId={} correlationId={} consumerName={}",
                     event.eventId(),
                     event.correlationId(),
-                    "payment-processed-logger"
+                    CONSUMER_NAME
             );
+            return false;
         }
+
+        return true;
     }
 
 }

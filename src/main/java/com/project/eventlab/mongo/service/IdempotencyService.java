@@ -1,15 +1,20 @@
 package com.project.eventlab.mongo.service;
 
-import com.mongodb.DuplicateKeyException;
 import com.project.eventlab.enums.ProcessingStatus;
 import com.project.eventlab.mongo.document.ProcessedEventDocument;
 import com.project.eventlab.mongo.repository.ProcessedEventRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class IdempotencyService {
+
+    private static final Logger log = LoggerFactory.getLogger(IdempotencyService.class);
 
     private final ProcessedEventRepository processedEventRepository;
 
@@ -23,6 +28,11 @@ public class IdempotencyService {
             String correlationId,
             String eventType
     ) {
+        // Fallback while the unique index is not in place yet.
+        if (processedEventRepository.existsByEventIdAndConsumerName(eventId, consumerName)) {
+            return false;
+        }
+
         ProcessedEventDocument document = new ProcessedEventDocument();
         document.setEventId(eventId);
         document.setConsumerName(consumerName);
@@ -40,9 +50,7 @@ public class IdempotencyService {
     }
 
     public void markProcessed(String eventId, String consumerName) {
-        ProcessedEventDocument document = processedEventRepository
-                .findByEventIdAndConsumerName(eventId, consumerName)
-                .orElseThrow(() -> new IllegalArgumentException("Processed event not found"));
+        ProcessedEventDocument document = findLatestProcessedEvent(eventId, consumerName);
 
         document.setStatus(ProcessingStatus.PROCESSED);
         document.setProcessedAt(LocalDateTime.now());
@@ -50,13 +58,31 @@ public class IdempotencyService {
     }
 
     public void markFailed(String eventId, String consumerName, String errorMessage) {
-        ProcessedEventDocument document = processedEventRepository
-                .findByEventIdAndConsumerName(eventId, consumerName)
-                .orElseThrow(() -> new IllegalStateException("Processed event not found"));
+        ProcessedEventDocument document = findLatestProcessedEvent(eventId, consumerName);
 
         document.setStatus(ProcessingStatus.FAILED);
         document.setErrorMessage(errorMessage);
         processedEventRepository.save(document);
+    }
+
+    private ProcessedEventDocument findLatestProcessedEvent(String eventId, String consumerName) {
+        List<ProcessedEventDocument> processedEvents = processedEventRepository
+                .findAllByEventIdAndConsumerNameOrderByCreatedAtDesc(eventId, consumerName);
+
+        if (processedEvents.isEmpty()) {
+            throw new IllegalStateException("Processed event not found");
+        }
+
+        if (processedEvents.size() > 1) {
+            log.warn(
+                    "[IDEMPOTENCY_DUPLICATE_RECORDS] eventId={} consumerName={} duplicates={}",
+                    eventId,
+                    consumerName,
+                    processedEvents.size()
+            );
+        }
+
+        return processedEvents.getFirst();
     }
 
 }

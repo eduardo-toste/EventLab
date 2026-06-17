@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 public class NotificationCreatedConsumerA {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationCreatedConsumerA.class);
+    private static final String CONSUMER_NAME = "notification-created-logger-a";
 
     private final ObjectMapper objectMapper;
     private final EventLogService eventLogService;
@@ -34,7 +35,9 @@ public class NotificationCreatedConsumerA {
             groupId = "notification-created-logger"
     )
     public void consume(EventEnvelope<?> event) {
-        startProcessingEvent(event);
+        if (!startProcessingEvent(event)) {
+            return;
+        }
 
         try {
             NotificationCreatedData data = objectMapper.convertValue(event.data(), NotificationCreatedData.class);
@@ -48,18 +51,18 @@ public class NotificationCreatedConsumerA {
                     data.status()
             );
 
-            eventLogService.saveConsumed(topic, "notification-created-logger-a", event);
-            idempotencyService.markProcessed(event.eventId(), "notification-created-logger-a");
+            eventLogService.saveConsumed(topic, CONSUMER_NAME, event);
+            idempotencyService.markProcessed(event.eventId(), CONSUMER_NAME);
         } catch (Exception ex) {
-            idempotencyService.markFailed(event.eventId(), "notification-created-logger", ex.getMessage());
+            idempotencyService.markFailed(event.eventId(), CONSUMER_NAME, ex.getMessage());
             throw ex;
         }
     }
 
-    private void startProcessingEvent(EventEnvelope<?> event) {
+    private boolean startProcessingEvent(EventEnvelope<?> event) {
         boolean acquired = idempotencyService.tryStartProcessing(
                 event.eventId(),
-                "notification-created-logger",
+                CONSUMER_NAME,
                 event.correlationId(),
                 event.eventType()
         );
@@ -69,9 +72,12 @@ public class NotificationCreatedConsumerA {
                     "[NOTIFICATION_CREATED_DUPLICATE] eventId={} correlationId={} consumerName={}",
                     event.eventId(),
                     event.correlationId(),
-                    "notification-created-logger"
+                    CONSUMER_NAME
             );
+            return false;
         }
+
+        return true;
     }
 
 }
