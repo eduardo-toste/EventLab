@@ -28,7 +28,6 @@ public class IdempotencyService {
             String correlationId,
             String eventType
     ) {
-        // Fallback while the unique index is not in place yet.
         if (processedEventRepository.existsByEventIdAndConsumerName(eventId, consumerName)) {
             return false;
         }
