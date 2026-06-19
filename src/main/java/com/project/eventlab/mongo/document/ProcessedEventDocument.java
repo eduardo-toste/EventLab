@@ -18,7 +18,9 @@ public class ProcessedEventDocument {
     private String eventType;
     private String consumerName;
     private ProcessingStatus status;
+    private int attemptCount;
     private LocalDateTime createdAt;
+    private LocalDateTime lastAttemptAt;
     private LocalDateTime processedAt;
     private String errorMessage;
 
