@@ -2,6 +2,7 @@ package com.project.eventlab.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.eventlab.dto.order.OrderCreatedData;
+import com.project.eventlab.enums.ProcessingStartDecision;
 import com.project.eventlab.event.EventEnvelope;
 import com.project.eventlab.mongo.service.EventLogService;
 import com.project.eventlab.mongo.service.IdempotencyService;
@@ -72,24 +73,43 @@ public class CreatedOrderConsumer {
     }
 
     private boolean startProcessingEvent(EventEnvelope<?> event) {
-        boolean acquired = idempotencyService.tryStartProcessing(
+        ProcessingStartDecision decision = idempotencyService.tryStartProcessing(
                 event.eventId(),
                 CONSUMER_NAME,
                 event.correlationId(),
                 event.eventType()
         );
 
-        if (!acquired) {
-            log.info(
-                    "[ORDER_CREATED_DUPLICATE] eventId={} correlationId={} consumerName={}",
-                    event.eventId(),
-                    event.correlationId(),
-                    CONSUMER_NAME
-            );
-            return false;
+        switch (decision) {
+            case STARTED:
+                return true;
+            case RETRYING_FAILED:
+                log.info(
+                        "[ORDER_CREATED_RETRYING_FAILED] eventId={} correlationId={} consumerName={}",
+                        event.eventId(),
+                        event.correlationId(),
+                        CONSUMER_NAME
+                );
+                return true;
+            case ALREADY_PROCESSED:
+                log.info(
+                        "[ORDER_CREATED_DUPLICATE] eventId={} correlationId={} consumerName={}",
+                        event.eventId(),
+                        event.correlationId(),
+                        CONSUMER_NAME
+                );
+                return false;
+            case ALREADY_PROCESSING:
+                log.info(
+                        "[ORDER_CREATED_ALREADY_PROCESSING] eventId={} correlationId={} consumerName={}",
+                        event.eventId(),
+                        event.correlationId(),
+                        CONSUMER_NAME
+                );
+                return false;
+            default:
+                throw new IllegalStateException("Unsupported processing start decision: " + decision);
         }
-
-        return true;
     }
 
 }

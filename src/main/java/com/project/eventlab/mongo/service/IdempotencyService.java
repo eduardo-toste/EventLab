@@ -1,5 +1,6 @@
 package com.project.eventlab.mongo.service;
 
+import com.project.eventlab.enums.ProcessingStartDecision;
 import com.project.eventlab.enums.ProcessingStatus;
 import com.project.eventlab.mongo.document.ProcessedEventDocument;
 import com.project.eventlab.mongo.repository.ProcessedEventRepository;
@@ -22,14 +23,19 @@ public class IdempotencyService {
         this.processedEventRepository = processedEventRepository;
     }
 
-    public boolean tryStartProcessing(
+    public ProcessingStartDecision tryStartProcessing(
             String eventId,
             String consumerName,
             String correlationId,
             String eventType
     ) {
-        if (processedEventRepository.existsByEventIdAndConsumerName(eventId, consumerName)) {
-            return false;
+        LocalDateTime now = LocalDateTime.now();
+        ProcessedEventDocument existingDocument = processedEventRepository
+                .findByEventIdAndConsumerName(eventId, consumerName)
+                .orElse(null);
+
+        if (existingDocument != null) {
+            return resumeExistingDocument(existingDocument, now);
         }
 
         ProcessedEventDocument document = new ProcessedEventDocument();
@@ -38,33 +44,57 @@ public class IdempotencyService {
         document.setCorrelationId(correlationId);
         document.setEventType(eventType);
         document.setStatus(ProcessingStatus.PROCESSING);
-        document.setCreatedAt(LocalDateTime.now());
+        document.setAttemptCount(1);
+        document.setCreatedAt(now);
+        document.setLastAttemptAt(now);
 
         try {
             processedEventRepository.save(document);
-            return true;
+            return ProcessingStartDecision.STARTED;
         } catch (DuplicateKeyException ex) {
-            return false;
+            ProcessedEventDocument savedDocument = findProcessedEvent(eventId, consumerName);
+            return resumeExistingDocument(savedDocument, now);
         }
     }
 
     public void markProcessed(String eventId, String consumerName) {
-        ProcessedEventDocument document = findLatestProcessedEvent(eventId, consumerName);
+        ProcessedEventDocument document = findProcessedEvent(eventId, consumerName);
 
         document.setStatus(ProcessingStatus.PROCESSED);
         document.setProcessedAt(LocalDateTime.now());
+        document.setErrorMessage(null);
         processedEventRepository.save(document);
     }
 
     public void markFailed(String eventId, String consumerName, String errorMessage) {
-        ProcessedEventDocument document = findLatestProcessedEvent(eventId, consumerName);
+        ProcessedEventDocument document = findProcessedEvent(eventId, consumerName);
 
+        document.setLastAttemptAt(LocalDateTime.now());
         document.setStatus(ProcessingStatus.FAILED);
         document.setErrorMessage(errorMessage);
         processedEventRepository.save(document);
     }
 
-    private ProcessedEventDocument findLatestProcessedEvent(String eventId, String consumerName) {
+    private ProcessingStartDecision resumeExistingDocument(ProcessedEventDocument document, LocalDateTime now) {
+        if (document.getStatus() == ProcessingStatus.PROCESSED) {
+            return ProcessingStartDecision.ALREADY_PROCESSED;
+        }
+
+        if (document.getStatus() == ProcessingStatus.PROCESSING) {
+            return ProcessingStartDecision.ALREADY_PROCESSING;
+        }
+
+        document.setStatus(ProcessingStatus.PROCESSING);
+        document.setAttemptCount(document.getAttemptCount() + 1);
+        document.setLastAttemptAt(now);
+        document.setProcessedAt(null);
+        document.setErrorMessage(null);
+        processedEventRepository.save(document);
+
+        return ProcessingStartDecision.RETRYING_FAILED;
+    }
+
+    private ProcessedEventDocument findProcessedEvent(String eventId, String consumerName) {
         List<ProcessedEventDocument> processedEvents = processedEventRepository
                 .findAllByEventIdAndConsumerNameOrderByCreatedAtDesc(eventId, consumerName);
 
@@ -83,5 +113,4 @@ public class IdempotencyService {
 
         return processedEvents.getFirst();
     }
-
 }

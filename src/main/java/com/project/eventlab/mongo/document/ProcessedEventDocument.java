@@ -91,4 +91,20 @@ public class ProcessedEventDocument {
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
     }
+
+    public int getAttemptCount() {
+        return attemptCount;
+    }
+
+    public void setAttemptCount(int attemptCount) {
+        this.attemptCount = attemptCount;
+    }
+
+    public LocalDateTime getLastAttemptAt() {
+        return lastAttemptAt;
+    }
+
+    public void setLastAttemptAt(LocalDateTime lastAttemptAt) {
+        this.lastAttemptAt = lastAttemptAt;
+    }
 }
