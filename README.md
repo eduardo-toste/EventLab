@@ -1,109 +1,187 @@
 # EventLab
 
-O **EventLab** e um projeto de estudo para praticar **Apache Kafka** e **MongoDB** com **Java 21** e **Spring Boot**.
+O **EventLab** e um laboratorio de estudo para praticar **Apache Kafka**, **MongoDB**, **Java 21** e **Spring Boot** em um fluxo orientado a eventos.
 
-O fluxo atual do projeto simula uma cadeia simples de eventos:
+O projeto implementa uma cadeia assincrona simples, mas com elementos operacionais importantes:
 
 `POST /orders` -> `order.created` -> `payment.processed` -> `notification.created`
 
-O objetivo nao e construir um sistema de producao completo. O objetivo e aprender, de forma progressiva, os conceitos operacionais e de implementacao mais importantes de eventos assicronos.
+Hoje o laboratorio ja cobre:
 
-## O que este projeto cobre
-
-- Kafka Producer
-- Kafka Consumer
-- Topics
-- Consumer Groups
-- Message Key
-- Partitions
-- Ordering
-- EventId
-- CorrelationId
-- MongoDB para event logs
-- Idempotencia
-- Retry
-- Dead Letter Topic
+- encadeamento de eventos
+- `eventId` e `correlationId`
+- `message key` com `orderId`
+- consumer groups
+- rastreabilidade em MongoDB
+- idempotencia por `eventId + consumerName`
+- retry com `DefaultErrorHandler`
+- DLT por topico
 
 ## Stack
 
 - Java 21
-- Spring Boot
+- Spring Boot 3.5
+- Spring Web
 - Spring Kafka
 - Spring Data MongoDB
-- MongoDB
-- Docker Compose
+- MongoDB 7
+- Apache Kafka 3.9
 - Kafka UI
+- Docker Compose
+- Maven Wrapper
 
-## Infra local
+## Fluxo funcional
 
-O projeto sobe os seguintes servicos:
+O fluxo principal funciona assim:
 
-- Kafka em `localhost:19092`
-- Kafka UI em `http://localhost:8081`
-- MongoDB em `localhost:27017`
-- Aplicacao Spring em `http://localhost:8080`
+1. o cliente chama `POST /orders`
+2. a aplicacao gera um `orderId` e publica `order.created`
+3. `CreatedOrderConsumer` consome o evento e delega para `PaymentService`
+4. `PaymentService` decide o status do pagamento e publica `payment.processed`
+5. `PaymentProcessedConsumer` consome o evento e delega para `NotificationService`
+6. `NotificationService` cria a notificacao e publica `notification.created`
+7. os consumers de notificacao registram o consumo e permitem estudar `consumer groups`
 
-Para iniciar a infraestrutura:
+## Regras atuais de negocio
 
-```bash
-docker compose up -d
-```
+- pagamentos com `total <= 1000.00` recebem status `APPROVED`
+- pagamentos com `total > 1000.00` recebem status `FAILED`
+- a notificacao publicada depende do status do pagamento
+- todos os eventos da cadeia preservam o mesmo `correlationId`
+- a key enviada para Kafka e sempre o `orderId`
 
-Para subir a aplicacao:
+## Topics
 
-```bash
-mvn spring-boot:run
-```
-
-## Fluxo atual
-
-Hoje o projeto trabalha com estes topics:
+Topics principais:
 
 - `order.created`
 - `payment.processed`
 - `notification.created`
 
-O fluxo principal e:
+Topics de dead letter:
 
-1. o client faz `POST /orders`
-2. a aplicacao cria o pedido e publica `order.created`
-3. um consumer processa e publica `payment.processed`
-4. outro consumer processa e publica `notification.created`
+- `order.created.dlt`
+- `payment.processed.dlt`
+- `notification.created.dlt`
 
-Isso cria um laboratorio pequeno, mas suficiente para estudar publicacao, consumo, encadeamento de eventos, key, partitions e rastreabilidade.
+## Consumers no projeto
 
-## Endpoint de teste
+Consumers de fluxo:
 
-Para gerar um fluxo completo:
+- `CreatedOrderConsumer`
+- `PaymentProcessedConsumer`
+- `NotificationCreatedConsumerA`
+
+Consumers auxiliares para estudo de grupos:
+
+- `NotificationCreatedConsumerB`
+- `NotificationCreatedConsumerC`
+- `NotificationCreatedConsumerD`
+
+Consumer de DLT:
+
+- `DeadLetterTopicConsumer`
+
+Observacao importante sobre grupos:
+
+- `NotificationCreatedConsumerA` e `NotificationCreatedConsumerB` compartilham o mesmo `groupId` logico de notificacao
+- `NotificationCreatedConsumerC` e `NotificationCreatedConsumerD` usam grupos diferentes
+- isso permite comparar distribuicao entre consumers do mesmo grupo e replicacao logica entre grupos distintos
+
+## Persistencia em MongoDB
+
+O projeto usa MongoDB para dois objetivos diferentes:
+
+1. rastrear o fluxo dos eventos
+2. proteger o processamento contra duplicacao
+
+Colecoes atuais:
+
+- `event_logs`: log de eventos publicados e consumidos
+- `processed_events`: controle de idempotencia por `eventId + consumerName`
+- `payments`: estado do pagamento e controle de publicacao
+- `notifications`: estado da notificacao e controle de publicacao
+
+## Infra local
+
+Servicos expostos localmente:
+
+- aplicacao Spring: `http://localhost:8080`
+- Kafka broker externo: `localhost:19092`
+- Kafka UI: `http://localhost:8081`
+- MongoDB: `localhost:27017`
+
+Credenciais MongoDB:
+
+- usuario: `admin`
+- senha: `admin`
+- database: `eventlab`
+
+## Como subir o ambiente
+
+Subir Kafka, Kafka UI e MongoDB:
 
 ```bash
-curl -X POST http://localhost:8080/orders \
-  -H "Content-Type: application/json" \
-  -d '{"customerName":"Maria","total":120.0}'
+docker compose up -d
 ```
+
+Subir a aplicacao:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Rodar testes:
+
+```bash
+./mvnw test
+```
+
+## Endpoint disponivel
 
 Endpoint atual:
 
 - `POST /orders`
 
+Exemplo de requisicao:
+
+```bash
+curl -X POST http://localhost:8080/orders \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"customer-001","total":120.00}'
+```
+
+Resposta esperada:
+
+```json
+{
+  "orderId": "generated-uuid",
+  "status": "CREATED",
+  "message": "Order created event published"
+}
+```
+
 Implementacao:
 
 - [OrderController.java](/Users/eduardotoste/Documents/projects/EventLab/src/main/java/com/project/eventlab/controller/OrderController.java:1)
 
-## Como estudar este repositorio
+## Retry e DLT
 
-Uma ordem boa de estudo e:
+O projeto ja possui tratamento de falhas com Spring Kafka:
 
-1. subir Kafka, Kafka UI, MongoDB e a aplicacao
-2. executar `POST /orders`
-3. observar os topics no Kafka UI
-4. ler as fases em ordem
-5. implementar cada fase e validar no proprio ambiente
+- `DefaultErrorHandler` com `FixedBackOff(1000ms, 2 tentativas)`
+- `IllegalArgumentException` e `DuplicateKeyException` configuradas como excecoes sem retry
+- envio automatico para DLT quando as tentativas acabam
+- registro de consumo da DLT pelo `DeadLetterTopicConsumer`
 
-Se voce pular direto para retry, DLT ou idempotencia sem consolidar event chaining, key e consumer groups, o entendimento fica superficial.
+Isso permite estudar:
 
-## Status
+- diferenca entre falha temporaria e falha permanente
+- impacto de retry em processamento idempotente
+- inspecao posterior de mensagens que sairam do fluxo principal
 
-Projeto em evolucao e orientado a estudo.
+## Estado atual do laboratorio
 
-O codigo atual ja permite praticar o fluxo base e a documentacao cobre as fases de estudo de 4 a 10.
+O repositorio ja permite praticar, no codigo real, os conceitos das fases 4 a 10.
+
+Ele nao tenta ser um sistema de producao completo. O foco continua sendo aprendizado progressivo, observabilidade do fluxo e entendimento operacional de processamento assincrono com Kafka.
